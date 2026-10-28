@@ -1,0 +1,69 @@
+# The current checkout and configured companion refs are tested together.
+# See .cnb/README.md for GRADII_*_URL / GRADII_*_REF configuration.
+.go-cache: &go-cache
+  - master:/go/pkg/mod:copy-on-write
+  - master:/root/.cache/go-build:copy-on-write
+
+.go-cache-read-only: &go-cache-read-only
+  - master:/go/pkg/mod:copy-on-write-read-only
+  - master:/root/.cache/go-build:copy-on-write-read-only
+
+.go: &go
+  runner:
+    tags: cnb:arch:amd64
+  env:
+    GOPROXY: https://mirrors.cloud.tencent.com/go/,https://goproxy.cn,https://goproxy.io,direct
+
+.test: &test
+  <<: *go
+  stages:
+    - name: checkout compatible modules and run all root tests
+      timeout: 30m
+      script: bash .cnb/ci.sh unit
+
+.test-external: &test-external
+  <<: *go
+  services:
+    - docker
+  stages:
+    - name: run framework tests module with this driver checkout
+      timeout: 30m
+      script: bash .cnb/ci.sh integration
+
+master:
+  push: &push-jobs
+    - name: Test (go 1.26)
+      <<: *test
+      docker:
+        image: golang:1.26
+        volumes: *go-cache
+    - name: Test (go 1.27)
+      <<: *test
+      docker:
+        image: golang:1.27
+        volumes: *go-cache
+    - name: Test Framework Integration (go 1.27)
+      <<: *test-external
+      docker:
+        image: golang:1.27
+        volumes: *go-cache
+main:
+  push: *push-jobs
+
+"**":
+  pull_request:
+    - name: Test (go 1.26)
+      <<: *test
+      docker:
+        image: golang:1.26
+        volumes: *go-cache-read-only
+    - name: Test (go 1.27)
+      <<: *test
+      docker:
+        image: golang:1.27
+        volumes: *go-cache-read-only
+    - name: Test Framework Integration (go 1.27)
+      <<: *test-external
+      docker:
+        image: golang:1.27
+        volumes: *go-cache-read-only

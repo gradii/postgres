@@ -17,9 +17,9 @@ func (_m *Replacer) EXPECT() *Replacer_Expecter {
 	return &Replacer_Expecter{mock: &_m.Mock}
 }
 
-// Replace provides a mock function with given fields: name
-func (_m *Replacer) Replace(name string) string {
-	ret := _m.Called(name)
+// Replace provides a mock function with given fields: _a0
+func (_m *Replacer) Replace(_a0 string) string {
+	ret := _m.Called(_a0)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Replace")
@@ -27,7 +27,7 @@ func (_m *Replacer) Replace(name string) string {
 
 	var r0 string
 	if rf, ok := ret.Get(0).(func(string) string); ok {
-		r0 = rf(name)
+		r0 = rf(_a0)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
@@ -41,12 +41,12 @@ type Replacer_Replace_Call struct {
 }
 
 // Replace is a helper method to define mock.On call
-//   - name string
-func (_e *Replacer_Expecter) Replace(name interface{}) *Replacer_Replace_Call {
-	return &Replacer_Replace_Call{Call: _e.mock.On("Replace", name)}
+//   - _a0 string
+func (_e *Replacer_Expecter) Replace(_a0 interface{}) *Replacer_Replace_Call {
+	return &Replacer_Replace_Call{Call: _e.mock.On("Replace", _a0)}
 }
 
-func (_c *Replacer_Replace_Call) Run(run func(name string)) *Replacer_Replace_Call {
+func (_c *Replacer_Replace_Call) Run(run func(_a0 string)) *Replacer_Replace_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run(args[0].(string))
 	})

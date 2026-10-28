@@ -1,11 +1,17 @@
 name: Test
 on:
   push:
-    branches:
-      - master
+    branches: [master, main]
   pull_request:
+permissions:
+  contents: read
 jobs:
   test:
-    uses: goravel/.github/.github/workflows/test_linux.yml@master
-    secrets: inherit
-    
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test ./...

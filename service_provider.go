@@ -1,55 +1,42 @@
 package postgres
 
 import (
-	"github.com/goravel/framework/contracts/binding"
-	"github.com/goravel/framework/contracts/foundation"
-	"github.com/goravel/framework/errors"
+	"github.com/gradii/framework/contracts/binding"
+	"github.com/gradii/framework/contracts/foundation"
+	"github.com/gradii/framework/errors"
+	postgreserrors "github.com/gradii/postgres/errors"
 )
 
 const (
-	Binding = "goravel.postgres"
+	Binding = "gradii.postgres"
 	Name    = "PostgreSQL"
 )
 
 var App foundation.Application
 
-type ServiceProvider struct {
-}
+type ServiceProvider struct{}
 
 func (r *ServiceProvider) Relationship() binding.Relationship {
 	return binding.Relationship{
-		Bindings: []string{
-			Binding,
-		},
-		Dependencies: []string{
-			binding.Config,
-			binding.Log,
-		},
-		ProvideFor: []string{
-			binding.DB,
-			binding.Orm,
-		},
+		Bindings:     []string{Binding},
+		Dependencies: []string{binding.Config},
+		ProvideFor:   []string{binding.DB, binding.Orm, binding.Schema},
 	}
 }
 
 func (r *ServiceProvider) Register(app foundation.Application) {
 	App = app
-
 	app.BindWith(Binding, func(app foundation.Application, parameters map[string]any) (any, error) {
 		config := app.MakeConfig()
 		if config == nil {
 			return nil, errors.ConfigFacadeNotSet.SetModule(Name)
 		}
-
-		log := app.MakeLog()
-		if log == nil {
-			return nil, errors.LogFacadeNotSet.SetModule(Name)
+		connection, ok := parameters["connection"].(string)
+		if !ok || connection == "" {
+			return nil, postgreserrors.ConnectionNotSet
 		}
-
-		return NewPostgres(config, log, app.MakeProcess(), parameters["connection"].(string)), nil
+		return NewPostgres(config, nil, nil, connection), nil
 	})
 }
 
-func (r *ServiceProvider) Boot(app foundation.Application) {
-
-}
+func (r *ServiceProvider) Boot(foundation.Application) {}
