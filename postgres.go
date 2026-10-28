@@ -54,7 +54,7 @@ func (r *Postgres) Pool() database.Pool {
 func (r *Postgres) fullConfigsToConfigs(values []contracts.FullConfig) []database.Config {
 	result := make([]database.Config, len(values))
 	for i, c := range values {
-		if c.Dsn != "" {
+		if c.Dsn != "" || c.Connector != nil {
 			c.Schema = ""
 		}
 		result[i] = database.Config{Connector: c.Connector, Connection: c.Connection, Driver: Name, Dsn: c.Dsn, Database: c.Database, Host: c.Host, Port: c.Port, Username: c.Username, Password: c.Password, Prefix: c.Prefix, Schema: c.Schema, Sslmode: c.Sslmode, Timezone: c.Timezone}

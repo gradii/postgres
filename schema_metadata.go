@@ -11,36 +11,24 @@ var _ driver.SchemaMetadataGrammar = (*SchemaGrammar)(nil)
 var _ driver.SchemaCurrentSchemas = (*SchemaGrammar)(nil)
 
 func (*SchemaGrammar) CurrentSchemas(string) []string { return []string{"public"} }
-func (r *SchemaGrammar) ResolveCurrentSchemas(info driver.SchemaConnectionInfo, catalog driver.SchemaCatalog) ([]string, error) {
-	var names []string
-	switch value := info.SearchPath.(type) {
-	case []string:
-		names = append(names, value...)
-	case string:
-		if value != "" {
-			names = strings.Split(value, ",")
-		}
+
+// ResolveCurrentSchemas asks the session to expand $user and quoted names and
+// exclude schemas that do not exist or are not accessible to the current role.
+func (r *SchemaGrammar) ResolveCurrentSchemas(_ driver.SchemaConnectionInfo, catalog driver.SchemaCatalog) ([]string, error) {
+	if catalog == nil {
+		return nil, errors.SchemaCurrentNamespaceUnavailable
 	}
-	if len(names) == 0 && info.Schema != "" {
-		names = strings.Split(info.Schema, ",")
+	rows, err := catalog.Select(driver.SchemaStatement{SQL: "select unnest(current_schemas(false)) as name"})
+	if err != nil {
+		return nil, err
 	}
-	if len(names) == 0 && catalog != nil {
-		rows, err := catalog.Select(driver.SchemaStatement{SQL: "select unnest(current_schemas(false)) as name"})
-		if err != nil {
-			return nil, err
+	names := make([]string, 0, len(rows))
+	for _, row := range rows {
+		name := cast.ToString(row["name"])
+		if name == "" {
+			return nil, errors.SchemaCurrentNamespaceUnavailable
 		}
-		for _, row := range rows {
-			names = append(names, cast.ToString(row["name"]))
-		}
-	}
-	if len(names) == 0 {
-		names = []string{"public"}
-	}
-	for i, name := range names {
-		names[i] = strings.Trim(strings.TrimSpace(name), "\"")
-		if names[i] == "$user" {
-			names[i] = info.Username
-		}
+		names = append(names, name)
 	}
 	return names, nil
 }

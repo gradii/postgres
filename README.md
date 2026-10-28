@@ -11,16 +11,22 @@ The framework owns pools, transactions and routing; this module supplies connect
 query and schema grammars, result processors and PostgreSQL literal rendering.
 
 Connection fields include `host`, `port`, `database`, `username`, `password`,
-`schema` (the PostgreSQL search path), `sslmode`, `timezone`, `prefix`, and `dsn`.
+`schema` (the PostgreSQL search path), `search_path`, `sslmode`, `timezone`, `prefix`, and `dsn`.
 Read/write entries use `[]contracts.Config` and inherit empty fields from the named
 connection. An explicit connector wins over a DSN; an explicit native DSN preserves
 its TLS, search-path, timezone and other connection options. Both generated and
-explicit DSNs use pgx simple protocol to preserve migration compatibility when
-result shapes change. `Pool()` does not perform connector validation or network I/O.
+explicit DSNs use pgx simple protocol without a cached plan, preserving migration
+compatibility when result shapes change. The framework binds JSON model fields
+marked `type:json/jsonb` as text after invoking their Valuer. Raw DB parameters
+retain pgx's native behavior: bytes represent bytea, so use a JSON Valuer returning
+string or the framework's JSON types when no model metadata is available.
+`Pool()` does not perform connector validation or network I/O.
 
 Timezone falls back to `app.timezone`, then UTC. Schema defaults to `public` for
-generated connections. DSN-only schema introspection uses the actual server search
-path. `prefix` remains supported; `singular`, `name_replacer`, and `no_lower_case`
+generated connections. `search_path` accepts server syntax or a list of literal
+schema names, taking precedence over the top-level `schema` alias. Current schema
+listing always uses the active session, including DSN/Connector-only connections
+and `$user` expansion. `prefix` remains supported; `singular`, `name_replacer`, and `no_lower_case`
 are removed. Model table and column names must be explicit.
 
 Stored generated columns require PostgreSQL 12; virtual generated columns require

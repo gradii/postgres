@@ -70,9 +70,11 @@ func TestSchemaMetadataVersionAndBindings(t *testing.T) {
 }
 func TestSchemaSearchPathAndOperations(t *testing.T) {
 	g := NewSchemaGrammar("")
-	names, err := g.ResolveCurrentSchemas(driver.SchemaConnectionInfo{Username: "app", SearchPath: `"$user", public`}, nil)
+	catalog := &currentSchemaCatalog{rows: []map[string]any{{"name": "app"}, {"name": "public"}}}
+	names, err := g.ResolveCurrentSchemas(driver.SchemaConnectionInfo{Username: "app", SearchPath: `"$user", public`}, catalog)
 	require.NoError(t, err)
 	require.Equal(t, []string{"app", "public"}, names)
+	require.Equal(t, "select unnest(current_schemas(false)) as name", catalog.statement.SQL)
 	statements, err := g.CompileSchemaOperation(driver.SchemaOperation{Kind: "dropAllTypes", Types: []driver.Type{{Name: "enum_name", Schema: "tenant", Type: "enum"}, {Name: "domain_name", Schema: "tenant", Type: "domain"}, {Name: "_array", Schema: "tenant", Implicit: true}}})
 	require.NoError(t, err)
 	require.Equal(t, []driver.SchemaStatement{{SQL: `drop type "tenant"."enum_name" cascade`}, {SQL: `drop domain "tenant"."domain_name" cascade`}}, statements)

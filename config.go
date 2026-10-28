@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"github.com/gradii/framework/contracts/config"
 	"github.com/gradii/postgres/contracts"
+	"strings"
 )
 
 type Config struct {
@@ -52,7 +53,19 @@ func (r *Config) fillDefault(values []contracts.Config) []contracts.FullConfig {
 			value.Port = r.config.GetInt(path + "port")
 		}
 		if value.Schema == "" {
-			value.Schema = r.config.GetString(path+"schema", "public")
+			switch searchPath := r.config.Get(path + "search_path").(type) {
+			case string:
+				value.Schema = searchPath
+			case []string:
+				quoted := make([]string, len(searchPath))
+				for i, name := range searchPath {
+					quoted[i] = `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+				}
+				value.Schema = strings.Join(quoted, ",")
+			}
+			if value.Schema == "" {
+				value.Schema = r.config.GetString(path+"schema", "public")
+			}
 		}
 		if value.Timezone == "" {
 			value.Timezone = r.config.GetString("app.timezone", "UTC")

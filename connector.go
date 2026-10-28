@@ -56,6 +56,8 @@ func connectorConfig(endpoint database.Config) (*pgx.ConnConfig, error) {
 		return nil, err
 	}
 	// Keep migration support: changing a row shape must not reuse a cached plan.
+	// The framework binds explicitly mapped JSON model values as text; raw byte
+	// parameters remain binary values under the native simple protocol contract.
 	parsed.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 	return parsed, nil
 }

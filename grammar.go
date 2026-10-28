@@ -23,6 +23,7 @@ var _ driver.Grammar = &SchemaGrammar{}
 type Grammar = SchemaGrammar
 
 type SchemaGrammar struct {
+	enumChanges       map[*driver.Command][]driver.SchemaStatement
 	versionResolver   func() (string, error)
 	attributeCommands []string
 	modifiers         []func(driver.Blueprint, driver.ColumnDefinition) string

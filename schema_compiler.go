@@ -62,6 +62,11 @@ func (r *SchemaGrammar) schemaColumnType(column driver.ColumnDefinition) (string
 		return "vector", nil
 	case "computed":
 		return "", errors.SchemaComputedRequiresType
+	case "enum":
+		if len(column.GetAllowed()) == 0 {
+			return "", errors.SchemaEnumValuesRequired.Args(column.GetName())
+		}
+		return "varchar(255)", nil
 	case "geometry", "geography":
 		kind := column.GetType()
 		if options.Subtype != "" {
@@ -114,9 +119,15 @@ func (r *SchemaGrammar) schemaColumn(blueprint driver.Blueprint, column driver.C
 		}
 	}
 	sql += r.ModifyGeneratedAs(blueprint, column) + r.ModifyIncrement(blueprint, column)
+	if column.GetType() == "enum" && !column.IsChange() {
+		sql += " constraint " + r.wrap.Value(r.enumName(blueprint, column.GetName())) + " check (" + r.enumCheck(column) + ")"
+	}
 	return sql, nil
 }
 func (r *SchemaGrammar) CompileSchemaCommand(blueprint driver.Blueprint, command *driver.Command) ([]driver.SchemaStatement, bool, error) {
+	if statements, ok := r.enumChanges[command]; ok {
+		return statements, true, nil
+	}
 	table := r.wrap.Table(blueprint.GetTableName())
 	var sql string
 	switch command.Name {
@@ -137,6 +148,9 @@ func (r *SchemaGrammar) CompileSchemaCommand(blueprint driver.Blueprint, command
 		sql += "table " + table + " (" + strings.Join(columns, ", ") + ")"
 	case schema.CommandAdd:
 		column := command.Column
+		if column.IsChange() && column.GetType() == "enum" && r.enumChanges == nil {
+			return nil, true, errors.SchemaEnumCatalogRequired.Args(column.GetName())
+		}
 		options := describeColumn(column)
 		if column.IsChange() {
 			if (options.StoredSet && options.StoredAs != nil) || (options.VirtualSet && options.VirtualAs != nil) {
@@ -149,14 +163,23 @@ func (r *SchemaGrammar) CompileSchemaCommand(blueprint driver.Blueprint, command
 			if options.Collation != "" {
 				kind += " collate " + r.wrap.Value(options.Collation)
 			}
-			changes := []string{"type " + kind}
+			var changes []string
+			if options.StoredSet || options.VirtualSet {
+				version, err := r.serverVersion()
+				if err != nil {
+					return nil, true, err
+				}
+				if version != "" && serverMajor(version) < 13 {
+					return nil, true, errors.SchemaFeatureNotSupported.Args(Name, "dropping generated expressions on PostgreSQL "+version)
+				}
+				// DEFAULT cannot be changed while the column is still generated.
+				changes = append(changes, "drop expression if exists")
+			}
+			changes = append(changes, "type "+kind)
 			for _, modifier := range []func(driver.Blueprint, driver.ColumnDefinition) string{r.ModifyNullable, r.ModifyDefault, r.ModifyGeneratedAsForChange, r.ModifyGeneratedAs} {
 				if value := strings.TrimSpace(modifier(blueprint, column)); value != "" {
 					changes = append(changes, value)
 				}
-			}
-			if options.StoredSet || options.VirtualSet {
-				changes = append(changes, "drop expression if exists")
 			}
 			for i := range changes {
 				changes[i] = "alter column " + r.wrap.Value(column.GetName()) + " " + changes[i]
@@ -199,11 +222,16 @@ func (r *SchemaGrammar) CompileSchemaStartingValues(blueprint driver.Blueprint) 
 	}
 	return result, nil
 }
-func (r *SchemaGrammar) SchemaExecutionPolicy(driver.Blueprint) driver.SchemaExecutionPolicy {
-	return driver.SchemaExecutionPolicy{Transactional: true}
-}
-func (r *SchemaGrammar) CompileSchemaBlueprint(driver.Blueprint, driver.SchemaCatalog) ([]driver.SchemaStatement, bool, error) {
-	return nil, false, nil
+func (r *SchemaGrammar) SchemaExecutionPolicy(blueprint driver.Blueprint) driver.SchemaExecutionPolicy {
+	policy := driver.SchemaExecutionPolicy{Transactional: true}
+	if blueprint != nil {
+		for _, command := range blueprint.GetCommands() {
+			if command.Name == schema.CommandAdd && command.Column.IsChange() && command.Column.GetType() == "enum" {
+				policy.NestedTransaction = true
+			}
+		}
+	}
+	return policy
 }
 func serverMajor(version string) int {
 	var major int

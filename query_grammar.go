@@ -261,6 +261,9 @@ func (g *QueryGrammar) appendUpdateBindings(out []any, value core.UpdateValue) [
 // appendUpdateBinding applies the per-value rule: an array value and a non-expression JSON-selector
 // value are json-encoded; anything else is appended as-is, so a sub-select splices in its own bindings.
 func (g *QueryGrammar) appendUpdateBinding(out []any, column string, value any) []any {
+	if _, subquery := value.(core.SubQueryBindings); subquery {
+		return g.AppendUpdateValueBinding(out, value)
+	}
 	if core.IsArrayValue(value) || (g.IsJsonSelector(column) && !core.IsExpression(value)) {
 		return append(out, grammars.EncodeJSON(value))
 	}
