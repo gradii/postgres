@@ -1,2 +1,3 @@
 include:
   - .cnb/test.yml
+  - .cnb/mirror.yml

@@ -1,0 +1,26 @@
+# Publishing pipelines for github.com/gradii/<module>. The main branch is the
+# only branch that leaves this repository, and a version tag travels with it:
+# a push to main publishes the branch plus the version tags the repository has,
+# and a version tag push publishes that tag immediately. The branch, tag and
+# credential handling all live in .cnb/mirror-github.sh, which every repository
+# of this workspace shares.
+main:
+  push:
+    - name: mirror-to-github
+      docker:
+        image: golang:1.26
+      imports:
+        - https://cnb.cool/gradii/secret/-/blob/main/deploy-github/gradii.yml
+      stages:
+        - name: mirror main and version tags to github
+          script: bash .cnb/mirror-github.sh branch
+"v*":
+  tag_push:
+    - name: mirror-tag-to-github
+      docker:
+        image: golang:1.26
+      imports:
+        - https://cnb.cool/gradii/secret/-/blob/main/deploy-github/gradii.yml
+      stages:
+        - name: mirror the pushed tag to github
+          script: bash .cnb/mirror-github.sh tag
