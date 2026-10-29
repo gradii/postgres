@@ -14,11 +14,39 @@ esac
 
 export GIT_TERMINAL_PROMPT=0
 export GOWORK=off
+ci_mode=${1:-}
 workspace_root=$(mktemp -d "${TMPDIR:-/tmp}/gradii-cnb.XXXXXX")
-# The `workspace` mode hands the directory to its caller, so it survives this run.
-if [[ "${1:-}" != workspace ]]; then
-  trap 'rm -rf "$workspace_root"' EXIT
-fi
+
+# A file named *.go.test is checked in uncompiled on purpose: it needs a driver module that this
+# repository's go.mod must not require, so renaming it into place is the only way to run it, and
+# only the modes that build the workspace holding those modules can.
+specified_tests_renamed=()
+rename_specified_tests_in() {
+  local path
+  while IFS= read -r path; do
+    [[ -z "$path" ]] && continue
+    mv "$path" "${path%.test}"
+    specified_tests_renamed+=("${path%.test}")
+  done < <(find "$source_root" -name '*.go.test' -print 2>/dev/null)
+  if [[ ${#specified_tests_renamed[@]} -gt 0 ]]; then
+    printf 'Renamed %d specified test file(s) into place\n' "${#specified_tests_renamed[@]}"
+  fi
+}
+
+rename_specified_tests_out() {
+  local path
+  for path in ${specified_tests_renamed[@]+"${specified_tests_renamed[@]}"}; do
+    mv "$path" "$path.test"
+  done
+}
+
+cleanup() {
+  rename_specified_tests_out
+  # The `workspace` mode hands the directory to its caller, so it survives this run.
+  [[ "$ci_mode" == workspace ]] || rm -rf "$workspace_root"
+}
+
+trap cleanup EXIT
 
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 
@@ -130,6 +158,54 @@ case "${1:-}" in
     prepare_workspace yes
     (cd "$framework_path/tests" && go test -v -count=1 -timeout 25m ./...)
     ;;
+  specified)
+    # Runs the *.go.test files and nothing else, after the ordinary suites: the rename is
+    # scoped to this mode, so no other mode, and no go mod tidy, ever sees those files.
+    prepare_workspace no
+    rename_specified_tests_in
+    if [[ ${#specified_tests_renamed[@]} -eq 0 ]]; then
+      printf 'No specified test files (*.go.test) in this checkout\n'
+      break
+    fi
+    # The file list form (`go test file_test.go`) would build those files as a throwaway
+    # command-line-arguments package, which cannot import an internal package, so the
+    # specified tests are selected by name inside their own package instead.
+    specified_dirs=()
+    specified_names=()
+    for specified_path in ${specified_tests_renamed[@]+"${specified_tests_renamed[@]}"}; do
+      specified_dir=$(dirname "$specified_path")
+      specified_file_names=$(grep -hoE '^func Test[A-Za-z0-9_]*' "$specified_path" | awk '{print $2}' | paste -sd'|' -)
+      specified_index=-1
+      specified_i=0
+      while [[ $specified_i -lt ${#specified_dirs[@]} ]]; do
+        [[ "${specified_dirs[$specified_i]}" == "$specified_dir" ]] && specified_index=$specified_i
+        specified_i=$((specified_i + 1))
+      done
+      if [[ $specified_index -ge 0 ]]; then
+        if [[ -n "$specified_file_names" ]]; then
+          if [[ -n "${specified_names[$specified_index]}" ]]; then
+            specified_names[$specified_index]="${specified_names[$specified_index]}|$specified_file_names"
+          else
+            specified_names[$specified_index]="$specified_file_names"
+          fi
+        fi
+      else
+        specified_dirs+=("$specified_dir")
+        specified_names+=("$specified_file_names")
+      fi
+    done
+    specified_i=0
+    while [[ $specified_i -lt ${#specified_dirs[@]} ]]; do
+      if [[ -n "${specified_names[$specified_i]}" ]]; then
+        printf 'Running the specified tests of %s: %s\n' "${specified_dirs[$specified_i]}" "${specified_names[$specified_i]}"
+        (cd "${specified_dirs[$specified_i]}" && go test -count=1 -timeout 10m -run "^(${specified_names[$specified_i]})$" .)
+      else
+        printf 'Running the specified tests of %s (whole package)\n' "${specified_dirs[$specified_i]}"
+        (cd "${specified_dirs[$specified_i]}" && go test -count=1 -timeout 10m .)
+      fi
+      specified_i=$((specified_i + 1))
+    done
+    ;;
   workspace)
     # Build the workspace and keep it, printing GOWORK for the caller to export
     # before running its own tools (lint, govulncheck) inside it.
@@ -137,6 +213,6 @@ case "${1:-}" in
     printf 'GOWORK=%s\n' "$GOWORK"
     ;;
   *)
-    fail 'Usage: bash .cnb/ci.sh {unit|database|integration|workspace}'
+    fail 'Usage: bash .cnb/ci.sh {unit|database|integration|specified|workspace}'
     ;;
 esac
