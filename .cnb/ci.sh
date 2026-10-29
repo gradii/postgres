@@ -15,23 +15,34 @@ esac
 export GIT_TERMINAL_PROMPT=0
 export GOWORK=off
 workspace_root=$(mktemp -d "${TMPDIR:-/tmp}/gradii-cnb.XXXXXX")
-trap 'rm -rf "$workspace_root"' EXIT
+# The `workspace` mode hands the directory to its caller, so it survives this run.
+if [[ "${1:-}" != workspace ]]; then
+  trap 'rm -rf "$workspace_root"' EXIT
+fi
 
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 
+# Every module of this workspace lives at cnb.cool/gradii/<name>, which is also
+# its default clone URL: GRADII_<NAME>_URL only has to be set to point somewhere
+# else. The GitHub home, github.com/gradii/<name>, is written by the mirror
+# pipeline in .cnb/mirror.yml and never read here. The ref stays explicit so that
+# a run pins the revision it tested, except for the framework: every driver
+# pipeline needs it, so an unset GRADII_FRAMEWORK_REF follows the default branch
+# of its home repository instead of failing.
 repository_config() {
   local name=$1 key url_key ref_key
   key=$(printf '%s' "$name" | tr '[:lower:]' '[:upper:]')
   url_key="GRADII_${key}_URL"
   ref_key="GRADII_${key}_REF"
-  repository_url=${!url_key:-}
+  repository_url=${!url_key:-https://cnb.cool/gradii/$name}
   repository_ref=${!ref_key:-}
-  if [[ "$name" == framework && -z "$repository_url" ]]; then
-    repository_url=https://cnb.cool/gradii/framework
+  [[ -n "$repository_url" ]] || fail "Set $url_key to the repository containing github.com/gradii/$name."
+  [[ "$repository_url" != -* ]] || fail "Repository URLs must not begin with '-'."
+  if [[ -n "$repository_ref" ]]; then
+    [[ "$repository_ref" != -* ]] || fail "Repository refs must not begin with '-'."
+  elif [[ "$name" != framework ]]; then
+    fail "Set $ref_key to a compatible branch, tag, or commit for github.com/gradii/$name."
   fi
-  [[ -n "$repository_url" ]] || fail "Set $url_key to the repository containing github.com/gradii/$name; no published driver fork is assumed."
-  [[ -n "$repository_ref" ]] || fail "Set $ref_key to a compatible branch, tag, or commit for github.com/gradii/$name."
-  [[ "$repository_url" != -* && "$repository_ref" != -* ]] || fail "Repository URLs and refs must not begin with '-'."
 }
 
 checkout_module() {
@@ -42,6 +53,13 @@ checkout_module() {
     repository_config "$name"
     checkout_path="$workspace_root/$name"
     if [[ ! -d "$checkout_path/.git" ]]; then
+      if [[ -z "$repository_ref" ]]; then
+        local key
+        key=$(printf '%s' "$name" | tr '[:lower:]' '[:upper:]')
+        repository_ref=$(git ls-remote --symref "$repository_url" HEAD 2>/dev/null | awk '/^ref:/{ sub("^refs/heads/", "", $2); print $2; exit }')
+        [[ -n "$repository_ref" ]] || fail "Cannot resolve the default branch of $repository_url; set GRADII_${key}_REF."
+        printf 'GRADII_%s_REF is not set; following the default branch %s\n' "$key" "$repository_ref"
+      fi
       printf 'Checking out %s at %s\n' "$name" "$repository_ref"
       git init --quiet "$checkout_path"
       git -C "$checkout_path" remote add origin "$repository_url"
@@ -112,7 +130,13 @@ case "${1:-}" in
     prepare_workspace yes
     (cd "$framework_path/tests" && go test -v -count=1 -timeout 25m ./...)
     ;;
+  workspace)
+    # Build the workspace and keep it, printing GOWORK for the caller to export
+    # before running its own tools (lint, govulncheck) inside it.
+    prepare_workspace no
+    printf 'GOWORK=%s\n' "$GOWORK"
+    ;;
   *)
-    fail 'Usage: bash .cnb/ci.sh {unit|database|integration}'
+    fail 'Usage: bash .cnb/ci.sh {unit|database|integration|workspace}'
     ;;
 esac

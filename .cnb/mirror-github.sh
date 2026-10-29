@@ -2,7 +2,9 @@
 set -euo pipefail
 
 # Mirror this repository to its GitHub home (github.com/gradii/<module>) from the
-# CNB pipeline. Two things are published, and only from main:
+# CNB pipeline. CNB is the source of truth, so GitHub is forced to match it:
+# every push is --force --atomic, and the branch and its tags land together or
+# not at all.
 #
 #   bash .cnb/mirror-github.sh branch   main, plus every version tag it has
 #   bash .cnb/mirror-github.sh tag      the tag that triggered this run
@@ -75,10 +77,13 @@ case "$mode" in
       refspecs="$refspecs refs/tags/${tag}:refs/tags/${tag}"
       published=$((published + 1))
     done < <(git tag --list 'v*' | sort -V)
-    printf 'Mirroring main and %s version tag(s) to github.com/gradii/%s\n' "$published" "$self"
-    git push --force "$remote" $refspecs
+    printf 'Force-mirroring main and %s version tag(s) to github.com/gradii/%s\n' "$published" "$self"
+    git push --force --atomic "$remote" $refspecs
     ;;
   tag)
+    # Only the tag is published here: a tag build is checked out at the tag, so
+    # pushing HEAD as main from this stage would move the branch to whatever the
+    # tag points at.
     tag=${CNB_BRANCH:-}
     [[ -n "$tag" ]] || { printf 'CNB_BRANCH is empty; no tag to publish.\n' >&2; exit 1; }
     if [[ $(version_number "$tag") -lt $(version_number "$first_tag") ]]; then
@@ -92,7 +97,7 @@ case "$mode" in
       printf 'Tag %s is not reachable from this checkout; nothing to publish.\n' "$tag" >&2
       exit 1
     }
-    printf 'Mirroring tag %s to github.com/gradii/%s\n' "$tag" "$self"
-    git push --force "$remote" "refs/tags/${tag}:refs/tags/${tag}"
+    printf 'Force-mirroring tag %s to github.com/gradii/%s\n' "$tag" "$self"
+    git push --force --atomic "$remote" "refs/tags/${tag}:refs/tags/${tag}"
     ;;
 esac

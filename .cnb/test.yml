@@ -16,6 +16,8 @@
 
 .test: &test
   <<: *go
+  imports:
+    - https://cnb.cool/gradii/secret/-/blob/main/ci/framework-refs.yml
   stages:
     - name: checkout compatible modules and run all root tests
       timeout: 30m
@@ -23,6 +25,8 @@
 
 .test-external: &test-external
   <<: *go
+  imports:
+    - https://cnb.cool/gradii/secret/-/blob/main/ci/framework-refs.yml
   services:
     - docker
   stages:
@@ -30,8 +34,8 @@
       timeout: 30m
       script: bash .cnb/ci.sh integration
 
-master:
-  push: &push-jobs
+main:
+  push:
     - name: Test (go 1.26)
       <<: *test
       docker:
@@ -47,8 +51,6 @@ master:
       docker:
         image: golang:1.27
         volumes: *go-cache
-main:
-  push: *push-jobs
 
 "**":
   pull_request:

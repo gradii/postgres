@@ -7,7 +7,7 @@ lifecycle cases. Driver cases run against the new runtime APIs. No old GORM
 implementation or compatibility module is retained.
 
 The current repository always uses the checkout supplied by CNB. For each other
-repository, configure these CNB pipeline environment variables:
+repository, use these variables, which the shared refs file provides:
 
 | Repository | Clone URL | Compatible branch, tag, or commit |
 | --- | --- | --- |
@@ -17,15 +17,20 @@ repository, configure these CNB pipeline environment variables:
 | sqlite | `GRADII_SQLITE_URL` | `GRADII_SQLITE_REF` |
 | sqlserver | `GRADII_SQLSERVER_URL` | `GRADII_SQLSERVER_REF` |
 
-The framework URL defaults to its existing remote,
-`https://cnb.cool/gradii/framework`. Driver URLs and all companion refs must be
-configured explicitly. The candidate `cnb.cool/gradii/{driver}` repositories
-were unavailable when these pipelines were added, and the original
-`goravel/{driver}` repositories do not contain the new module namespaces. Use
-refs that contain the coordinated migration; pin commit IDs for reproducible
-runs. Each checkout is validated against its expected `github.com/gradii/...`
-module name before testing. Authentication uses the runner's Git configuration;
-URLs should not contain credentials.
+Every module of this workspace lives at `https://cnb.cool/gradii/<name>`, which
+is the default clone URL, so `GRADII_<NAME>_URL` only has to be set to point
+somewhere else. The GitHub home, `https://github.com/gradii/<name>`, is written
+by the mirror pipelines described below and never read here. The companion values come from the shared secret file
+`https://cnb.cool/gradii/secret/-/blob/main/ci/framework-refs.yml`, which every
+test job imports: it carries `GRADII_<NAME>_URL` and `GRADII_<NAME>_REF` for all
+five modules, and each ref names a branch, tag, or commit, so pin a tag or a
+commit there for reproducible runs. If a checkout has to come from somewhere
+else, change the file. The framework is the single exception: with
+`GRADII_FRAMEWORK_REF` unset the checkout follows the default branch of
+`https://cnb.cool/gradii/framework`. Each checkout is validated
+against its expected `github.com/gradii/...` module name before testing.
+Authentication uses the runner's Git configuration; URLs should not contain
+credentials.
 
 `bash .cnb/ci.sh unit` tests all five root modules.
 `bash .cnb/ci.sh database` tests the framework database packages.

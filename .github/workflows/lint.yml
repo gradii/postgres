@@ -1,10 +1,29 @@
+# Lint, run inside the same workspace the test workflow builds: this module's own
+# go.mod resolves the framework from the released tag, while here it is linted
+# against the sibling checkouts.
+
 name: Lint
 on:
   push:
-    branches: [master, main]
+    branches:
+      - main
   pull_request:
 permissions:
   contents: read
+env:
+  # The sibling repositories are cloned from GitHub here; CNB uses its own host.
+  # The entry for this repository is ignored: ci.sh always tests the checkout the
+  # runner supplied, so a pull request is tested as it is.
+  GRADII_FRAMEWORK_URL: https://github.com/gradii/framework
+  GRADII_MYSQL_URL: https://github.com/gradii/mysql
+  GRADII_POSTGRES_URL: https://github.com/gradii/postgres
+  GRADII_SQLITE_URL: https://github.com/gradii/sqlite
+  GRADII_SQLSERVER_URL: https://github.com/gradii/sqlserver
+  GRADII_FRAMEWORK_REF: main
+  GRADII_MYSQL_REF: main
+  GRADII_POSTGRES_REF: main
+  GRADII_SQLITE_REF: main
+  GRADII_SQLSERVER_REF: main
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -13,6 +32,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
+      - name: Build the workspace
+        run: echo "GOWORK=$(bash .cnb/ci.sh workspace | sed -n 's/^GOWORK=//p')" >> "$GITHUB_ENV"
       - uses: golangci/golangci-lint-action@v8
         with:
           version: latest
