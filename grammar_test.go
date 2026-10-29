@@ -10,7 +10,6 @@ import (
 	"github.com/gradii/framework/foundation/json"
 	mocksdriver "github.com/gradii/framework/mocks/database/driver"
 	mocksfoundation "github.com/gradii/framework/mocks/foundation"
-	"github.com/gradii/framework/support/convert"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
@@ -597,7 +596,7 @@ func (s *GrammarSuite) TestCompileJsonValues() {
 		},
 		{
 			name:     "pointer values",
-			args:     []any{convert.Pointer(123)},
+			args:     []any{new(123)},
 			expected: []any{"123"},
 		},
 	}
@@ -643,14 +642,14 @@ func (s *GrammarSuite) TestCompileUnique() {
 	}{
 		{
 			name:               "with deferrable and initially immediate",
-			deferrable:         convert.Pointer(true),
-			initiallyImmediate: convert.Pointer(true),
+			deferrable:         new(true),
+			initiallyImmediate: new(true),
 			expectSql:          `alter table "goravel_users" add constraint "unique_users_email" unique ("id", "email") deferrable initially immediate`,
 		},
 		{
 			name:               "with deferrable and initially immediate, both false",
-			deferrable:         convert.Pointer(false),
-			initiallyImmediate: convert.Pointer(false),
+			deferrable:         new(false),
+			initiallyImmediate: new(false),
 			expectSql:          `alter table "goravel_users" add constraint "unique_users_email" unique ("id", "email") not deferrable initially deferred`,
 		},
 		{

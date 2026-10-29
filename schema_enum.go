@@ -127,9 +127,10 @@ func isEnumConstraintName(name string) bool {
 		return false
 	}
 	for _, c := range strings.TrimPrefix(name, "gradii_enum_") {
-		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
-			return false
+		if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') {
+			continue
 		}
+		return false
 	}
 	return true
 }

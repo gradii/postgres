@@ -84,7 +84,7 @@ func TestFrameworkIntegration(t *testing.T) {
 	t.Run("cold single connection transaction", func(t *testing.T) {
 		tx, err := db.BeginTransaction()
 		require.NoError(t, err)
-		defer tx.Rollback()
+		defer func() { require.NoError(t, tx.Rollback()) }()
 		var rows []map[string]any
 		require.NoError(t, tx.Query().SelectRaw("1 as marker").Get(&rows))
 		require.Len(t, rows, 1)
@@ -157,7 +157,7 @@ func TestFrameworkIntegration(t *testing.T) {
 	t.Run("ORM transaction uses one writer", func(t *testing.T) {
 		tx, err := query.Clone().BeginTransaction()
 		require.NoError(t, err)
-		defer tx.Rollback()
+		defer func() { require.NoError(t, tx.Rollback()) }()
 		record := integrationRecord{DisplayValue: "rolled back", Document: `{"roles":[]}`}
 		require.NoError(t, tx.Create(&record))
 		require.Greater(t, record.RecordKey, uint64(0))
